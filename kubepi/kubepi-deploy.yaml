@@ -69,7 +69,7 @@ spec:
     spec:
       containers:
       - name: kubepi
-        image: kubepi/kubepi:latest
+        image: 1panel/kubepi:latest
         imagePullPolicy: Always
         ports:
         - containerPort: 80
@@ -128,10 +128,11 @@ metadata:
   labels:
     app: kubepi
 spec:
-  type: ClusterIP  # 可以改为 NodePort 或 LoadBalancer
+  type: NodePort  # 改为 NodePort 以便局域网访问
   ports:
   - port: 80
     targetPort: 80
+    nodePort: 30888  # 固定端口，便于局域网访问
     protocol: TCP
     name: http
   selector:
