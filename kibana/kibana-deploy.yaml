@@ -1,0 +1,194 @@
+# Kibana 8.11.0 Kubernetes 部署配置
+# 与 Elasticsearch 8.11.0 兼容
+
+---
+# Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: kibana
+  labels:
+    name: kibana
+
+---
+# ConfigMap for Kibana configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: kibana-config
+  namespace: kibana
+  labels:
+    app: kibana
+data:
+  kibana.yml: |
+    # Kibana 8.11.0 配置
+    server.host: "0.0.0.0"
+    server.port: 5601
+    server.name: "kibana"
+    
+    # Elasticsearch 连接配置
+    elasticsearch.hosts: ["http://elasticsearch-service.elasticsearch.svc.cluster.local:9200"]
+    
+    # 监控和日志配置
+    monitoring.ui.container.elasticsearch.enabled: true
+    logging.appenders.file.type: file
+    logging.appenders.file.fileName: /usr/share/kibana/logs/kibana.log
+    logging.appenders.file.layout.type: json
+    
+    # 安全配置 (开发环境)
+    xpack.security.enabled: false
+    xpack.encryptedSavedObjects.encryptionKey: "a7a6311933d3503b89bc2dbc36572c33a6c10925682e591bffcab6911c06786d"
+    
+    # 性能优化
+    server.maxPayload: 1048576
+    elasticsearch.requestTimeout: 30000
+    elasticsearch.shardTimeout: 30000
+    
+    # 国际化
+    i18n.locale: "zh-CN"
+
+---
+# Kibana Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kibana
+  namespace: kibana
+  labels:
+    app: kibana
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kibana
+  template:
+    metadata:
+      labels:
+        app: kibana
+    spec:
+      containers:
+      - name: kibana
+        image: kibana:9.2.0
+        ports:
+        - containerPort: 5601
+          name: http
+          protocol: TCP
+        env:
+        - name: NODE_OPTIONS
+          value: "--max-old-space-size=1800"
+        - name: ELASTICSEARCH_HOSTS
+          value: "http://elasticsearch-service.elasticsearch.svc.cluster.local:9200"
+        volumeMounts:
+        - name: kibana-config
+          mountPath: /usr/share/kibana/config/kibana.yml
+          subPath: kibana.yml
+        - name: kibana-data
+          mountPath: /usr/share/kibana/data
+        - name: kibana-logs
+          mountPath: /usr/share/kibana/logs
+        resources:
+          requests:
+            memory: "1Gi"
+            cpu: "500m"
+          limits:
+            memory: "2Gi"
+            cpu: "1000m"
+        readinessProbe:
+          httpGet:
+            path: /api/status
+            port: 5601
+          initialDelaySeconds: 60
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        livenessProbe:
+          httpGet:
+            path: /api/status
+            port: 5601
+          initialDelaySeconds: 120
+          periodSeconds: 20
+          timeoutSeconds: 5
+          failureThreshold: 3
+      volumes:
+      - name: kibana-config
+        configMap:
+          name: kibana-config
+      - name: kibana-data
+        emptyDir: {}
+      - name: kibana-logs
+        emptyDir: {}
+      restartPolicy: Always
+
+---
+# Kibana ClusterIP Service
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana-service
+  namespace: kibana
+  labels:
+    app: kibana
+spec:
+  type: ClusterIP
+  ports:
+  - port: 5601
+    targetPort: 5601
+    protocol: TCP
+    name: http
+  selector:
+    app: kibana
+
+---
+# Kibana NodePort Service for external access
+apiVersion: v1
+kind: Service
+metadata:
+  name: kibana-nodeport
+  namespace: kibana
+  labels:
+    app: kibana
+    service-type: nodeport
+spec:
+  type: NodePort
+  ports:
+  - port: 5601
+    targetPort: 5601
+    nodePort: 30561
+    protocol: TCP
+    name: http
+  selector:
+    app: kibana
+
+---
+# NetworkPolicy (可选，用于网络安全)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kibana-network-policy
+  namespace: kibana
+spec:
+  podSelector:
+    matchLabels:
+      app: kibana
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  - from: []
+    ports:
+    - protocol: TCP
+      port: 5601
+  egress:
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: elasticsearch
+    ports:
+    - protocol: TCP
+      port: 9200
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 53
+    - protocol: UDP
+      port: 53

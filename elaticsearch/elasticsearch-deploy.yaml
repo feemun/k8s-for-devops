@@ -1,0 +1,189 @@
+# Elasticsearch 8 Kubernetes 部署配置
+# 包含命名空间、配置映射、持久化存储、部署和服务
+
+---
+# 命名空间
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: elasticsearch
+  labels:
+    name: elasticsearch
+
+---
+# ConfigMap - Elasticsearch 配置
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: elasticsearch-config
+  namespace: elasticsearch
+data:
+  elasticsearch.yml: |
+    cluster.name: "docker-cluster"
+    network.host: 0.0.0.0
+    
+    # 发现配置 - 单节点模式
+    discovery.type: single-node
+    
+    # 安全配置 - 开发环境禁用安全功能
+    xpack.security.enabled: false
+    xpack.security.enrollment.enabled: false
+    xpack.security.http.ssl.enabled: false
+    xpack.security.transport.ssl.enabled: false
+    
+    # 内存配置
+    bootstrap.memory_lock: false
+    
+    # 网络配置
+    http.port: 9200
+    transport.port: 9300
+    
+    # 日志配置
+    logger.level: INFO
+
+---
+# PersistentVolumeClaim - 数据持久化
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: elasticsearch-pvc
+  namespace: elasticsearch
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+# Deployment - Elasticsearch 部署
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: elasticsearch
+  namespace: elasticsearch
+  labels:
+    app: elasticsearch
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: elasticsearch
+  template:
+    metadata:
+      labels:
+        app: elasticsearch
+    spec:
+      containers:
+      - name: elasticsearch
+        image: elasticsearch:9.2.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9200
+          name: http
+          protocol: TCP
+        - containerPort: 9300
+          name: transport
+          protocol: TCP
+        env:
+        - name: node.name
+          value: "elasticsearch-0"
+        - name: cluster.name
+          value: "docker-cluster"
+        - name: discovery.type
+          value: "single-node"
+        - name: ES_JAVA_OPTS
+          value: "-Xms1g -Xmx1g"
+        - name: xpack.security.enabled
+          value: "false"
+        - name: xpack.security.enrollment.enabled
+          value: "false"
+        volumeMounts:
+        - name: elasticsearch-data
+          mountPath: /usr/share/elasticsearch/data
+        - name: elasticsearch-config
+          mountPath: /usr/share/elasticsearch/config/elasticsearch.yml
+          subPath: elasticsearch.yml
+        resources:
+          requests:
+            memory: "2Gi"
+            cpu: "500m"
+          limits:
+            memory: "4Gi"
+            cpu: "2000m"
+        readinessProbe:
+          httpGet:
+            path: /_cluster/health
+            port: 9200
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /_cluster/health
+            port: 9200
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+      volumes:
+      - name: elasticsearch-data
+        persistentVolumeClaim:
+          claimName: elasticsearch-pvc
+      - name: elasticsearch-config
+        configMap:
+          name: elasticsearch-config
+      initContainers:
+      - name: increase-vm-max-map
+        image: busybox:1.35
+        command: ['sh', '-c', 'sysctl -w vm.max_map_count=262144']
+        securityContext:
+          privileged: true
+
+---
+# Service - ClusterIP (内部访问)
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-service
+  namespace: elasticsearch
+  labels:
+    app: elasticsearch
+spec:
+  type: ClusterIP
+  ports:
+  - port: 9200
+    targetPort: 9200
+    protocol: TCP
+    name: http
+  - port: 9300
+    targetPort: 9300
+    protocol: TCP
+    name: transport
+  selector:
+    app: elasticsearch
+
+---
+# Service - NodePort (外部访问)
+apiVersion: v1
+kind: Service
+metadata:
+  name: elasticsearch-nodeport
+  namespace: elasticsearch
+  labels:
+    app: elasticsearch
+spec:
+  type: NodePort
+  ports:
+  - port: 9200
+    targetPort: 9200
+    nodePort: 30920
+    protocol: TCP
+    name: http
+  - port: 9300
+    targetPort: 9300
+    nodePort: 30930
+    protocol: TCP
+    name: transport
+  selector:
+    app: elasticsearch
