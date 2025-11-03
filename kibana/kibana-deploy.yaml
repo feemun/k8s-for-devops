@@ -1,5 +1,5 @@
-# Kibana 8.11.0 Kubernetes 部署配置
-# 与 Elasticsearch 8.11.0 兼容
+# Kibana 9.2.0 Kubernetes 部署配置
+# 与 Elasticsearch 9.2.0 兼容
 
 ---
 # Namespace
@@ -21,30 +21,21 @@ metadata:
     app: kibana
 data:
   kibana.yml: |
-    # Kibana 8.11.0 配置
+    # Kibana 9.2.0 配置 - 支持HTTPS Elasticsearch
     server.host: "0.0.0.0"
     server.port: 5601
+    
+    # Elasticsearch HTTPS 连接
+    elasticsearch.hosts: ["https://elasticsearch-service.elasticsearch.svc.cluster.local:9200"]
+    elasticsearch.username: "kibana_system"
+    elasticsearch.password: "kibana123"
+    elasticsearch.ssl.verificationMode: "none"
+    
+    # 启用安全功能
+    xpack.security.enabled: true
+    
+    # 基本设置
     server.name: "kibana"
-    
-    # Elasticsearch 连接配置
-    elasticsearch.hosts: ["http://elasticsearch-service.elasticsearch.svc.cluster.local:9200"]
-    
-    # 监控和日志配置
-    monitoring.ui.container.elasticsearch.enabled: true
-    logging.appenders.file.type: file
-    logging.appenders.file.fileName: /usr/share/kibana/logs/kibana.log
-    logging.appenders.file.layout.type: json
-    
-    # 安全配置 (开发环境)
-    xpack.security.enabled: false
-    xpack.encryptedSavedObjects.encryptionKey: "a7a6311933d3503b89bc2dbc36572c33a6c10925682e591bffcab6911c06786d"
-    
-    # 性能优化
-    server.maxPayload: 1048576
-    elasticsearch.requestTimeout: 30000
-    elasticsearch.shardTimeout: 30000
-    
-    # 国际化
     i18n.locale: "zh-CN"
 
 ---
@@ -77,11 +68,24 @@ spec:
         - name: NODE_OPTIONS
           value: "--max-old-space-size=1800"
         - name: ELASTICSEARCH_HOSTS
-          value: "http://elasticsearch-service.elasticsearch.svc.cluster.local:9200"
+          value: "https://elasticsearch-service.elasticsearch.svc.cluster.local:9200"
+        - name: ELASTICSEARCH_USERNAME
+          value: "kibana_system"
+        - name: ELASTICSEARCH_PASSWORD
+          value: "kibana123"
+        - name: ELASTICSEARCH_SSL_VERIFICATIONMODE
+          value: "none"
+        - name: SERVER_HOST
+          value: "0.0.0.0"
+        - name: SERVER_PORT
+          value: "5601"
+        - name: SERVER_NAME
+          value: "kibana"
+        - name: XPACK_SECURITY_ENABLED
+          value: "true"
+        - name: I18N_LOCALE
+          value: "zh-CN"
         volumeMounts:
-        - name: kibana-config
-          mountPath: /usr/share/kibana/config/kibana.yml
-          subPath: kibana.yml
         - name: kibana-data
           mountPath: /usr/share/kibana/data
         - name: kibana-logs
@@ -110,9 +114,6 @@ spec:
           timeoutSeconds: 5
           failureThreshold: 3
       volumes:
-      - name: kibana-config
-        configMap:
-          name: kibana-config
       - name: kibana-data
         emptyDir: {}
       - name: kibana-logs
@@ -139,7 +140,7 @@ spec:
     app: kibana
 
 ---
-# Kibana NodePort Service for external access
+# Service - NodePort (外部访问)
 apiVersion: v1
 kind: Service
 metadata:
@@ -147,7 +148,6 @@ metadata:
   namespace: kibana
   labels:
     app: kibana
-    service-type: nodeport
 spec:
   type: NodePort
   ports:
