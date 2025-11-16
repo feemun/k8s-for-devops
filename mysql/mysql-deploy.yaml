@@ -91,7 +91,7 @@ spec:
     spec:
       containers:
       - name: mysql
-        image: mysql:8.4
+        image: mysql:8.4.5
         imagePullPolicy: IfNotPresent
         ports:
         - containerPort: 3306
@@ -150,7 +150,7 @@ spec:
           name: mysql-config
 
 ---
-# MySQL Service (ClusterIP) - 暂时注释，仅验证外部 NodePort 访问
+# MySQL Service (ClusterIP) 
 apiVersion: v1
 kind: Service
 metadata:
@@ -163,26 +163,6 @@ spec:
   ports:
   - port: 3306
     targetPort: 3306
-    protocol: TCP
-    name: mysql
-  selector:
-    app: mysql
-
----
-# MySQL Service (NodePort) - 用于外部访问
-apiVersion: v1
-kind: Service
-metadata:
-  name: mysql-nodeport
-  namespace: mysql
-  labels:
-    app: mysql
-spec:
-  type: NodePort
-  ports:
-  - port: 3306
-    targetPort: 3306
-    nodePort: 30306
     protocol: TCP
     name: mysql
   selector:

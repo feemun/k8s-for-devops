@@ -128,43 +128,11 @@ metadata:
   labels:
     app: kubepi
 spec:
-  type: NodePort  # 改为 NodePort 以便局域网访问
+  type: ClusterIP
   ports:
   - port: 80
     targetPort: 80
-    nodePort: 30888  # 固定端口，便于局域网访问
     protocol: TCP
     name: http
   selector:
     app: kubepi
-
----
-# Optional: Ingress (如果你有 Ingress Controller)
-apiVersion: networking.k8s.io/v1
-kind: Ingress
-metadata:
-  name: kubepi-ingress
-  namespace: kubepi
-  labels:
-    app: kubepi
-  annotations:
-    nginx.ingress.kubernetes.io/rewrite-target: /
-    # 如果需要HTTPS，取消下面的注释
-    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
-spec:
-  # 如果需要HTTPS，取消下面的注释
-  # tls:
-  # - hosts:
-  #   - kubepi.yourdomain.com
-  #   secretName: kubepi-tls
-  rules:
-  - host: kubepi.local  # 替换为你的域名
-    http:
-      paths:
-      - path: /
-        pathType: Prefix
-        backend:
-          service:
-            name: kubepi-service
-            port:
-              number: 80

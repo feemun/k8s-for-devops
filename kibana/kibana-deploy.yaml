@@ -21,18 +21,13 @@ metadata:
     app: kibana
 data:
   kibana.yml: |
-    # Kibana 9.2.0 配置 - 支持HTTPS Elasticsearch
+    # Kibana 9.2.0 配置 - 连接 HTTP Elasticsearch（测试环境）
     server.host: "0.0.0.0"
     server.port: 5601
     
-    # Elasticsearch HTTPS 连接
-    elasticsearch.hosts: ["https://elasticsearch-service.elasticsearch.svc.cluster.local:9200"]
-    elasticsearch.username: "kibana_system"
-    elasticsearch.password: "kibana123"
-    elasticsearch.ssl.verificationMode: "none"
-    
-    # 启用安全功能
-    xpack.security.enabled: true
+    # Elasticsearch HTTP 连接
+    elasticsearch.hosts: ["http://elasticsearch-service.elasticsearch.svc.cluster.local:9200"]
+    xpack.security.enabled: false
     
     # 基本设置
     server.name: "kibana"
@@ -68,13 +63,7 @@ spec:
         - name: NODE_OPTIONS
           value: "--max-old-space-size=1800"
         - name: ELASTICSEARCH_HOSTS
-          value: "https://elasticsearch-service.elasticsearch.svc.cluster.local:9200"
-        - name: ELASTICSEARCH_USERNAME
-          value: "kibana_system"
-        - name: ELASTICSEARCH_PASSWORD
-          value: "kibana123"
-        - name: ELASTICSEARCH_SSL_VERIFICATIONMODE
-          value: "none"
+          value: "http://elasticsearch-service.elasticsearch.svc.cluster.local:9200"
         - name: SERVER_HOST
           value: "0.0.0.0"
         - name: SERVER_PORT
@@ -82,7 +71,7 @@ spec:
         - name: SERVER_NAME
           value: "kibana"
         - name: XPACK_SECURITY_ENABLED
-          value: "true"
+          value: "false"
         - name: I18N_LOCALE
           value: "zh-CN"
         volumeMounts:
@@ -138,57 +127,3 @@ spec:
     name: http
   selector:
     app: kibana
-
----
-# Service - NodePort (外部访问)
-apiVersion: v1
-kind: Service
-metadata:
-  name: kibana-nodeport
-  namespace: kibana
-  labels:
-    app: kibana
-spec:
-  type: NodePort
-  ports:
-  - port: 5601
-    targetPort: 5601
-    nodePort: 30561
-    protocol: TCP
-    name: http
-  selector:
-    app: kibana
-
----
-# NetworkPolicy (可选，用于网络安全)
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: kibana-network-policy
-  namespace: kibana
-spec:
-  podSelector:
-    matchLabels:
-      app: kibana
-  policyTypes:
-  - Ingress
-  - Egress
-  ingress:
-  - from: []
-    ports:
-    - protocol: TCP
-      port: 5601
-  egress:
-  - to:
-    - namespaceSelector:
-        matchLabels:
-          name: elasticsearch
-    ports:
-    - protocol: TCP
-      port: 9200
-  - to: []
-    ports:
-    - protocol: TCP
-      port: 53
-    - protocol: UDP
-      port: 53
