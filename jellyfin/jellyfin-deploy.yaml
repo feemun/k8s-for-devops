@@ -1,0 +1,134 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: jellyfin
+  labels:
+    name: jellyfin
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jellyfin-config-pvc
+  namespace: jellyfin
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: standard
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jellyfin-cache-pvc
+  namespace: jellyfin
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: standard
+
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: jellyfin-media-pvc
+  namespace: jellyfin
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 10Gi
+  storageClassName: standard
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: jellyfin
+  namespace: jellyfin
+  labels:
+    app: jellyfin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: jellyfin
+  template:
+    metadata:
+      labels:
+        app: jellyfin
+    spec:
+      containers:
+      - name: jellyfin
+        image: jellyfin/jellyfin:10.9.10
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8096
+          name: http
+          protocol: TCP
+        env:
+        - name: JELLYFIN_PublishedServerUrl
+          value: "http://jellyfin-service.jellyfin.svc.cluster.local:8096"
+        volumeMounts:
+        - name: jellyfin-config
+          mountPath: /config
+        - name: jellyfin-cache
+          mountPath: /cache
+        - name: jellyfin-media
+          mountPath: /media
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "1000m"
+        readinessProbe:
+          httpGet:
+            path: /
+            port: 8096
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /
+            port: 8096
+          initialDelaySeconds: 60
+          periodSeconds: 20
+          timeoutSeconds: 5
+      volumes:
+      - name: jellyfin-config
+        persistentVolumeClaim:
+          claimName: jellyfin-config-pvc
+      - name: jellyfin-cache
+        persistentVolumeClaim:
+          claimName: jellyfin-cache-pvc
+      - name: jellyfin-media
+        persistentVolumeClaim:
+          claimName: jellyfin-media-pvc
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: jellyfin-service
+  namespace: jellyfin
+  labels:
+    app: jellyfin
+spec:
+  type: ClusterIP
+  selector:
+    app: jellyfin
+  ports:
+  - name: http
+    port: 8096
+    targetPort: 8096
+    protocol: TCP

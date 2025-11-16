@@ -1,0 +1,146 @@
+---
+# Redis Namespace
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: redis-service
+  labels:
+    name: redis
+
+---
+# Redis ConfigMap
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redis-config
+  namespace: redis-service
+data:
+  redis.conf: |
+    # Redis 7.2.0 配置文件
+    # 网络配置
+    bind 0.0.0.0
+    port 6379
+    protected-mode no
+    
+    # 持久化配置
+    save 900 1
+    save 300 10
+    save 60 10000
+    
+    # 内存配置
+    maxmemory 512mb
+    maxmemory-policy allkeys-lru
+    
+    # 日志配置
+    loglevel notice
+    logfile ""
+    
+    # 安全配置
+    # requirepass redis123
+    
+    # 其他配置
+    timeout 0
+    tcp-keepalive 300
+    databases 16
+    
+    # AOF 持久化
+    appendonly yes
+    appendfilename "appendonly.aof"
+    appendfsync everysec
+
+---
+# Redis PersistentVolume
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: redis-pv
+  namespace: redis-service
+spec:
+  capacity:
+    storage: 5Gi
+  accessModes:
+    - ReadWriteOnce
+  persistentVolumeReclaimPolicy: Retain
+  storageClassName: manual
+  hostPath:
+    path: /tmp/redis-data
+
+---
+# Redis PersistentVolumeClaim
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-pvc
+  namespace: redis-service
+spec:
+  accessModes:
+    - ReadWriteOnce
+  resources:
+    requests:
+      storage: 5Gi
+  storageClassName: manual
+
+---
+# Redis Deployment
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis
+  namespace: redis-service
+  labels:
+    app: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: redis
+  template:
+    metadata:
+      labels:
+        app: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7.2.0-alpine
+        ports:
+        - containerPort: 6379
+        command:
+          - redis-server
+          - /etc/redis/redis.conf
+        volumeMounts:
+        - name: redis-config
+          mountPath: /etc/redis
+        - name: redis-storage
+          mountPath: /data
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "250m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+      volumes:
+      - name: redis-config
+        configMap:
+          name: redis-config
+      - name: redis-storage
+        persistentVolumeClaim:
+          claimName: redis-pvc
+
+---
+# Redis Service (ClusterIP)
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-service
+  namespace: redis-service
+  labels:
+    app: redis
+spec:
+  selector:
+    app: redis
+  ports:
+  - port: 6379
+    targetPort: 6379
+    protocol: TCP
+  type: ClusterIP
