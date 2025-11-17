@@ -21,4 +21,4 @@
 # - 确保本机端口未被占用，且防火墙放行该端口
 
 # 默认执行：转发到 Service 的 6379
-kubectl port-forward --address 0.0.0.0 service/redis-service 16379:6379 -n redis-service &
+kubectl port-forward --address 0.0.0.0 service/redis-service 16379:6379 -n redis &
