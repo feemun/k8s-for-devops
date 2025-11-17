@@ -1,0 +1,98 @@
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: xxljob
+  labels:
+    name: xxljob
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: xxljob-db-secret
+  namespace: xxljob
+type: Opaque
+data:
+  mysql-username: cm9vdA==
+  mysql-password: dXNlcnBhc3M=
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xxl-job-admin
+  namespace: xxljob
+  labels:
+    app: xxl-job-admin
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: xxl-job-admin
+  template:
+    metadata:
+      labels:
+        app: xxl-job-admin
+    spec:
+      containers:
+      - name: xxl-job-admin
+        image: xuxueli/xxl-job-admin:3.2.0
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 8080
+          name: http
+        env:
+        - name: SPRING_DATASOURCE_URL
+          value: "jdbc:mysql://mysql-service.mysql.svc.cluster.local:3306/xxl_job?useUnicode=true&characterEncoding=UTF-8&autoReconnect=true&serverTimezone=Asia/Shanghai"
+        - name: SPRING_DATASOURCE_USERNAME
+          valueFrom:
+            secretKeyRef:
+              name: xxljob-db-secret
+              key: mysql-username
+        - name: SPRING_DATASOURCE_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: xxljob-db-secret
+              key: mysql-password
+        - name: SPRING_DATASOURCE_DRIVER_CLASS_NAME
+          value: "com.mysql.cj.jdbc.Driver"
+        readinessProbe:
+          httpGet:
+            path: /xxl-job-admin
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 10
+          timeoutSeconds: 5
+        livenessProbe:
+          httpGet:
+            path: /xxl-job-admin
+            port: 8080
+          initialDelaySeconds: 60
+          periodSeconds: 20
+          timeoutSeconds: 5
+        resources:
+          requests:
+            memory: "512Mi"
+            cpu: "250m"
+          limits:
+            memory: "1Gi"
+            cpu: "500m"
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: xxl-job-admin-service
+  namespace: xxljob
+  labels:
+    app: xxl-job-admin
+spec:
+  type: ClusterIP
+  ports:
+  - port: 18080
+    targetPort: 8080
+    protocol: TCP
+    name: http
+  selector:
+    app: xxl-job-admin

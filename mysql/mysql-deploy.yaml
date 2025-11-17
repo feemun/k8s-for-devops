@@ -21,8 +21,6 @@ type: Opaque
 data:
   # root 密码: mysql123 (base64 编码)
   mysql-root-password: bXlzcWwxMjM=
-  # 数据库用户密码: userpass (base64 编       码)
-  mysql-password: dXNlcnBhc3M=
 
 ---
 # MySQL 持久化存储卷声明
@@ -103,14 +101,7 @@ spec:
               name: mysql-secret
               key: mysql-root-password
         - name: MYSQL_DATABASE
-          value: "testdb"
-        - name: MYSQL_USER
-          value: "testuser"
-        - name: MYSQL_PASSWORD
-          valueFrom:
-            secretKeyRef:
-              name: mysql-secret
-              key: mysql-password
+          value: "test"
         volumeMounts:
         - name: mysql-storage
           mountPath: /var/lib/mysql
