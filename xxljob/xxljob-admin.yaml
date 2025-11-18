@@ -15,7 +15,7 @@ metadata:
 type: Opaque
 data:
   mysql-username: cm9vdA==
-  mysql-password: dXNlcnBhc3M=
+  mysql-password: bXlzcWwxMjM=
 
 ---
 apiVersion: apps/v1
